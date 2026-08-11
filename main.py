@@ -138,3 +138,35 @@ plt.show()
 
 U2 =0 #second derivative
 u = x #something x
+
+h = 1000
+interval = (0,1)
+# v = np.linspace(interval[1],interval[1],h)
+v = np.zeros(h)
+opp = np.zeros((h,h))
+for i in range(h):
+    for j in range(h):
+        if i==j:
+            opp[i,j] = -2/(h**2) + v[i]
+        elif abs(i-j)==1:
+            opp[i,j] = 1/(h**2)
+        else:
+            opp[i,j] = 0
+            
+vals, vecs = np.linalg.eig(opp)
+
+# for vec in vecs:
+#     vec[0] = 0
+#     vec[-1] = 0
+
+print(vals)
+print(vecs)
+
+x = np.linspace(interval[0],interval[1],h)
+fig, ax = plt.subplots()
+for i in range(len(vecs)):
+    if vecs[i][0] > 1/(h**2) or vecs[i][h-1] > 1/(h**2):
+        continue
+    ax.plot(x, vecs[i], label=f'Vector {i+1}')
+    break
+plt.show()
