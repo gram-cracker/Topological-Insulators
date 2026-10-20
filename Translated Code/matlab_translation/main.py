@@ -2,7 +2,8 @@ import sys
 from pathlib import Path
 
 import matplotlib
-matplotlib.use("Agg")
+# matplotlib.use("Agg")
+matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.linalg import eigh
@@ -76,13 +77,37 @@ def _lowest_eigenfrequencies(matrices, kappa, n_omega):
     return np.sqrt(_lowest_characteristic_values(matrices, kappa, n_omega))
 
 
-def _band_path(lat_c, n_kappa):
-    points = [
-        (np.pi * np.ones(n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
-        (np.linspace(np.pi, 0.0, n_kappa), np.zeros(n_kappa)),
-        (np.zeros(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
-        (np.linspace(0.0, np.pi, n_kappa), np.pi * np.ones(n_kappa)),
-    ]
+# def _band_path_TXMT(lat_c, n_kappa):
+#     """Return the T-to-X-to-M-to-T Bloch path in MATLAB coordinates."""
+#     points = [
+#         (np.linspace(0.0, np.pi, n_kappa),np.zeros(n_kappa)),
+#         (np.pi * np.ones(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
+#         (np.linspace(np.pi, 0.0, n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
+#     ]
+#     return np.vstack([
+#         np.column_stack((kx, ky)) / lat_c
+#         for kx, ky in points
+#     ])
+    
+    
+def _band_path(lat_c, n_kappa, path_type="MXTxM"):
+    if path_type == "TXMT":
+        """Return the T-to-X-to-M-to-T Bloch path in MATLAB coordinates."""
+        points = [
+            (np.linspace(0.0, np.pi, n_kappa),np.zeros(n_kappa)),
+            (np.pi * np.ones(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
+            (np.linspace(np.pi, 0.0, n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
+        ]
+    elif path_type == "MXTxM":
+        """Return the M-to-X-to-T-to-X'-to-M Bloch path in MATLAB coordinates."""
+        points = [
+            (np.pi * np.ones(n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
+            (np.linspace(np.pi, 0.0, n_kappa), np.zeros(n_kappa)),
+            (np.zeros(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
+            (np.linspace(0.0, np.pi, n_kappa), np.pi * np.ones(n_kappa)),
+        ]
+    else:
+        raise ValueError("path_type must be either 'TXMT' or 'MXTxM'.")
     return np.vstack([
         np.column_stack((kx, ky)) / lat_c
         for kx, ky in points
@@ -90,13 +115,19 @@ def _band_path(lat_c, n_kappa):
 
 
 def solve_band_structure(lat_c=1.0, n_kappa=100, n_omega=7, mesh_size=0.02):
-    """Compute bands along the MATLAB M-to-X-to-T-to-M Bloch path."""
+    # """Compute bands along the MATLAB M-to-X-to-T-to-M Bloch path."""
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size)
     return _solve_band_structure(matrices, lat_c, n_kappa, n_omega)
 
 
-def _solve_band_structure(matrices, lat_c, n_kappa, n_omega):
-    kappa_vec = _band_path(lat_c, n_kappa)
+def _solve_band_structure(matrices, lat_c, n_kappa, n_omega, path_type="MXTxM"):
+    # if path_type == "TXMT":
+    #     kappa_vec = _band_path_TXMT(lat_c, n_kappa)
+    #     # title = "$\Gamma$-X-M-$\Gamma$"
+    # else:
+    #     kappa_vec = _band_path_MXTxM(lat_c, n_kappa)
+    #     # title = "M-X-$\Gamma$-X'-M"
+    kappa_vec = _band_path(lat_c, n_kappa, path_type)
     omega = np.empty((n_omega, kappa_vec.shape[0]), dtype=float)
     for n, kappa in enumerate(kappa_vec):
         omega[:, n] = (
@@ -261,7 +292,7 @@ def _solve_lattice_point_bands(
     estimate = {
         "kappa_center": kappa_center,
         "characteristic_values": values_at_center,
-        "direct_gap": float(values_at_center[1] - values_at_center[0]),
+        "direct_gap": [float(values_at_center[i+1] - values_at_center[i]) for i in range(n_bands-1)],
         "mean_gap_slope": float(np.mean(list(directional_slopes.values()))),
         "directional_gap_slopes": directional_slopes,
         "fit_radius": float(radii[fit_count]),
@@ -269,13 +300,25 @@ def _solve_lattice_point_bands(
     return characteristic_values, kappa_x, kappa_y, estimate
 
 
-def plot_band_structure(omega):
+def plot_band_structure(omega, path_type=""):
     fig, ax = plt.subplots()
     for band in range(omega.shape[0]):
         ax.plot(omega[band, :], linewidth=1.8, label=f"band {band + 1}")
     ax.set_xlabel("Bloch point index")
     ax.set_ylabel("Frequency")
-    ax.set_title("Square-lattice band structure (M-X-T-M-X)")
+    
+    if path_type == "TXMT":
+        ax.set_xticks([0, omega.shape[1] // 3, 2 * omega.shape[1] // 3, omega.shape[1] - 1])
+        ax.set_xticklabels(["$\Gamma$", "X", "M", "$\Gamma$"])
+        title = "$\Gamma$-X-M-$\Gamma$ band structure"
+    elif path_type == "MXTxM":
+        ax.set_xticks([0, omega.shape[1] // 4, 2 * omega.shape[1] // 4, 3 * omega.shape[1] // 4, omega.shape[1] - 1])
+        ax.set_xticklabels(["M", "X", "$\Gamma$", "X'", "M"])
+        title = "M-X-$\Gamma$-X'-M band structure"
+    else:
+        title = "Band structure"
+        
+    ax.set_title(title)
     ax.legend()
     fig.tight_layout()
     return fig, ax
@@ -377,16 +420,16 @@ def plot_frequency_surfaces(omega, kappa_x, kappa_y):
 def _plot_lattice_point_bands(
     characteristic_values, kappa_x, kappa_y, estimate, point_label
 ):
-    """Plot the two lowest characteristic-value surfaces around a Bloch point."""
+    # """Plot the two lowest characteristic-value surfaces around a Bloch point."""
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
     colors = ("tab:blue", "tab:orange")
-    for band in range(2):
+    for band in range(characteristic_values.shape[2]):
         ax.plot_surface(
             kappa_x / np.pi,
             kappa_y / np.pi,
             characteristic_values[:, :, band],
-            color=colors[band],
+            # color=colors[band],
             alpha=0.78,
             linewidth=0,
             label=f"Band {band + 1}",
@@ -414,7 +457,7 @@ def _plot_lattice_point_bands(
         (
             f"At {point_label}: lambda1={values_at_m[0]:.6g}, "
             f"lambda2={values_at_m[1]:.6g}\n"
-            f"Direct gap={estimate['direct_gap']:.4g}\n"
+            f"Direct gap={[f'{gap:.4g}' for gap in estimate['direct_gap']]}\n"
             f"Mean near-M gap slope={estimate['mean_gap_slope']:.4g}\n"
             f"Directional slopes (d gap / d|k|):\n{slope_text}"
         ),
@@ -426,7 +469,7 @@ def _plot_lattice_point_bands(
     ax.set_xlabel(r"$\kappa_x/\pi$")
     ax.set_ylabel(r"$\kappa_y/\pi$")
     ax.set_zlabel("Characteristic value (lambda)")
-    ax.set_title(f"Two lowest characteristic-value bands near {point_label}")
+    ax.set_title(f"Lowest characteristic-value bands near {point_label}")
     ax.legend(loc="lower right")
     fig.tight_layout()
     return fig, ax
@@ -471,8 +514,16 @@ def plot_m_point_bands(characteristic_values, kappa_x, kappa_y, estimate):
         characteristic_values, kappa_x, kappa_y, estimate, "M"
     )
 
+def plot_m_point_touching_bands(characteristic_values, kappa_x, kappa_y, estimate):
+    """Plot precomputed characteristic-value bands close to M."""
+    estimate["characteristic_values"] = estimate["characteristic_values"][1:3]
+    estimate["direct_gap"] = estimate["direct_gap"][1:3]
+    return _plot_lattice_point_bands(
+        characteristic_values[:,:,1:3], kappa_x, kappa_y, estimate, "M"
+    )
 
 def main():
+    print(matplotlib.get_backend())
     # Graph images are written here; change this path to choose another location.
     output_dir = ROOT / "outputs"
     output_dir.mkdir(exist_ok=True)
@@ -483,40 +534,41 @@ def main():
     mesh_size = 0.02
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size)
 
-    # Band path: 100 samples on each of the four M-X-T-M-X path segments,
-    # with the lowest 7 bands computed at every Bloch vector.
-    path_samples = 100
-    path_band_count = 7
-    omega, _ = _solve_band_structure(
-        matrices, lat_c, path_samples, path_band_count
-    )
-    band_fig, _ = plot_band_structure(omega)
-    band_fig.savefig(output_dir / "band_structure.png", dpi=180)
-    plt.close(band_fig)
+    # # Band path: 100 samples on each of the path segments,
+    # # with the lowest 7 bands computed at every Bloch vector.
+    # path_type = "TXMT"  # or "MXTxM"
+    # path_samples = 100
+    # path_band_count = 7
+    # omega, _ = _solve_band_structure(
+    #     matrices, lat_c, path_samples, path_band_count, path_type
+    # )
+    # band_fig, _ = plot_band_structure(omega, path_type)
+    # band_fig.savefig(output_dir / "band_structure.png", dpi=180)
+    # plt.close(band_fig)
 
-    # Frequency surface centered at Gamma (0,0), spanning +/-0.1*pi/a
-    # on each reciprocal-lattice axis, sampled on a 21-by-21 grid.
-    # Increase grid_size for finer sampling; change center to inspect elsewhere.
-    gamma_grid_size = 21
-    gamma_band_count = 5
-    gamma_center = (0.0, 0.0)
-    surface_omega, kappa_x, kappa_y = _solve_frequency_surfaces(
-        matrices,
-        lat_c,
-        gamma_grid_size,
-        gamma_band_count,
-        gamma_center,
-    )
-    surface_fig, _ = plot_frequency_surfaces(surface_omega, kappa_x, kappa_y)
-    surface_fig.savefig(output_dir / "frequency_surfaces.png", dpi=180)
-    plt.close(surface_fig)
+    # # Frequency surface centered at Gamma (0,0), spanning +/-0.1*pi/a
+    # # on each reciprocal-lattice axis, sampled on a 21-by-21 grid.
+    # # Increase grid_size for finer sampling; change center to inspect elsewhere.
+    # gamma_grid_size = 21
+    # gamma_band_count = 5
+    # gamma_center = (0.0, 0.0)
+    # surface_omega, kappa_x, kappa_y = _solve_frequency_surfaces(
+    #     matrices,
+    #     lat_c,
+    #     gamma_grid_size,
+    #     gamma_band_count,
+    #     gamma_center,
+    # )
+    # surface_fig, _ = plot_frequency_surfaces(surface_omega, kappa_x, kappa_y)
+    # surface_fig.savefig(output_dir / "frequency_surfaces.png", dpi=180)
+    # plt.close(surface_fig)
 
     # M-point plot: center is (pi/a, pi/a); radius_fraction=0.1 samples
     # +/-0.1*pi/a along each axis. grid_size controls the 2-D plot resolution.
     # Two lowest characteristic-value bands are shown; estimate_samples controls
     # the number of radial samples used for the near-M gap-slope estimate.
-    m_grid_size = 21
-    m_band_count = 2
+    m_grid_size = 31
+    m_band_count = 3
     m_radius_fraction = 0.1
     m_estimate_samples = 11
     m_values, m_kx, m_ky, m_estimate = _solve_m_point_bands(
@@ -527,7 +579,9 @@ def main():
         m_radius_fraction,
         m_estimate_samples,
     )
-    m_fig, _ = plot_m_point_bands(m_values, m_kx, m_ky, m_estimate)
+    # m_fig, _ = plot_m_point_bands(m_values, m_kx, m_ky, m_estimate)
+    m_fig, _ = plot_m_point_touching_bands(m_values, m_kx, m_ky, m_estimate)
+    plt.show()
     m_fig.savefig(output_dir / "m_point_lower_bands.png", dpi=180)
     plt.close(m_fig)
 
@@ -537,7 +591,7 @@ def main():
     print(
         "M-point estimate: "
         f"lambda1={values_at_m[0]:.8g}, lambda2={values_at_m[1]:.8g}, "
-        f"direct gap={m_estimate['direct_gap']:.8g}"
+        f"direct gap={[f'{gap:.8g}' for gap in m_estimate['direct_gap']]}"
     )
     print(
         "M-point normalized frequencies: "
