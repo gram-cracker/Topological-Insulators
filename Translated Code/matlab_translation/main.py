@@ -412,10 +412,12 @@ def plot_frequency_surfaces(omega, kappa_x, kappa_y, lat_c=1.0):
             kappa_x / np.pi,
             kappa_y / np.pi,
             omega[:, :, band],
-            alpha=0.75,
-            linewidth=0,
+            alpha=0.5,
+            linewidth=0.3,
+            label=f"Band {band + 1}"
         )
     
+    MIN = np.min(omega)
     MAX = np.max(omega)
     T = np.array([0.0, 0.0])
     X = np.array([np.pi/lat_c, 0.0])
@@ -424,31 +426,31 @@ def plot_frequency_surfaces(omega, kappa_x, kappa_y, lat_c=1.0):
     ax.scatter(
         2*[T[0] / np.pi],
         2*[T[1] / np.pi],
-        [0,MAX],
+        [0,1.1*MAX],
         color="black",
         marker=r"$\Gamma$",
         s=55,
-        label=r"$\Gamma$",
+        # label=r"$\Gamma$",
     )
     ax.stem([X[0] / np.pi],[X[1] / np.pi],[MAX])
     ax.scatter(
         2*[X[0] / np.pi],
         2*[X[1] / np.pi],
-        [0,MAX],
+        [0,1.1*MAX],
         color="black",
         marker=r"$X$",
         s=55,
-        label=r"X",
+        # label=r"X",
     )
     ax.stem([M[0] / np.pi],[M[1] / np.pi],[MAX])
     ax.scatter(
         2*[M[0] / np.pi],
         2*[M[1] / np.pi],
-        [0,MAX],
+        [0,1.1*MAX],
         color="black",
         marker=r"$M$",
         s=55,
-        label=r"M",
+        # label=r"M",
     )
     
     ax.set_xlim([kappa_x[0].min() / np.pi, kappa_x[0].max() / np.pi])
@@ -457,24 +459,9 @@ def plot_frequency_surfaces(omega, kappa_x, kappa_y, lat_c=1.0):
     ax.set_ylabel(r"$\kappa_y/\pi$")
     ax.set_zlabel("Frequency")
     ax.set_title("Square-lattice bands near the Gamma point")
-    fig.tight_layout()
-    return fig, ax
-
-
-    ax.set_ylim([kappa_y.min() / np.pi, kappa_y.max() / np.pi])
-    ax.set_xlabel(r"$\kappa_x/\pi$")
-    ax.set_ylabel(r"$\kappa_y/\pi$")
-    ax.set_zlabel("Frequency")
-    ax.set_title("Square-lattice bands near the Gamma point")
-    fig.tight_layout()
-    return fig, ax
-
-
-    ax.set_ylim([kappa_y.min() / np.pi, kappa_y.max() / np.pi])
-    ax.set_xlabel(r"$\kappa_x/\pi$")
-    ax.set_ylabel(r"$\kappa_y/\pi$")
-    ax.set_zlabel("Frequency")
-    ax.set_title("Square-lattice bands near the Gamma point")
+    ax.legend()
+    ax.view_init(elev=20, azim=60)
+    
     fig.tight_layout()
     return fig, ax
 
@@ -533,6 +520,8 @@ def _plot_lattice_point_bands(
     ax.set_zlabel(r"Characteristic value ($\omega^2$)")
     ax.set_title(f"Lowest characteristic-value bands near {point_label}")
     ax.legend(loc="lower right")
+    ax.view_init(elev=20, azim=60)
+    
     fig.tight_layout()
     return fig, ax
 
@@ -605,18 +594,18 @@ def main():
     lat_c = 1.0
     mesh_size = 0.02
     
-    # # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
-    # radii = [0.25, 0.1, 0.01]
-    # M = np.array([np.pi / lat_c, np.pi / lat_c])
-    # C_0 = 8* (np.pi**3)/(lat_c**3)
-    # for eps in radii:
-    #     estimate = 2*np.pi**2+C_0*(eps**2)
-    #     touching = calc_m_point_lowest_touching(lat_c=lat_c, PEC_radius=eps)
-    #     avg = np.mean(touching)
-    #     print(f"Radius = {eps:.2f}   Touch @ M: {touching[0]:.6f}, {touching[1]:.6f}   Averaged: {avg:.6f}   Error Gap: {touching[1] - touching[0]:.6f}")
-    #     # print(f"                Averaged:   {avg:.6f}")
-    #     print(f"                Estimate:  {estimate:.6f}")
-    #     print(f"                Diffs:     {touching[0]-estimate:.6f}, {touching[1]-estimate:.6f}\n")
+    # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
+    radii = [0.25, 0.1, 0.01]
+    M = np.array([np.pi / lat_c, np.pi / lat_c])
+    C_0 = 8* (np.pi**3)/(lat_c**3)
+    for eps in radii:
+        estimate = 2*np.pi**2+C_0*(eps**2)
+        touching = calc_m_point_lowest_touching(lat_c=lat_c, PEC_radius=eps)
+        avg = np.mean(touching)
+        print(f"Radius = {eps:.2f}   Touch @ M: {touching[0]:.6f}, {touching[1]:.6f}   Averaged: {avg:.6f}   Error Gap: {touching[1] - touching[0]:.6f}")
+        # print(f"                Averaged:   {avg:.6f}")
+        print(f"                Estimate:  {estimate:.6f}")
+        print(f"                Diffs:     {touching[0]-estimate:.6f}, {touching[1]-estimate:.6f}\n")
     
     # exit()
     
@@ -632,7 +621,7 @@ def main():
     surface_fig.savefig(output_dir / "surface_plot_snapshot.png", dpi=180)
     plt.close(surface_fig)
 
-    exit()
+    # exit()
 
     # Band path: 100 samples on each of the path segments,
     # with the lowest 7 bands computed at every Bloch vector.
