@@ -457,7 +457,7 @@ def plot_frequency_surfaces(omega, kappa_x, kappa_y, lat_c=1.0):
     ax.set_ylim([kappa_y[:,0].min() / np.pi, kappa_y[:,0].max() / np.pi])
     ax.set_xlabel(r"$\kappa_x/\pi$")
     ax.set_ylabel(r"$\kappa_y/\pi$")
-    ax.set_zlabel("Frequency")
+    ax.set_zlabel(r"Frequency ($\omega$)")
     ax.set_title("Square-lattice bands near the Gamma point")
     ax.legend()
     ax.view_init(elev=20, azim=60)
@@ -583,12 +583,173 @@ def calc_m_point_lowest_touching(lat_c=1.0, PEC_radius=0.1):
     touching = characteristic_vals[1:3]
     return touching
 
+
+
+def _plot_lattice_point_bands(
+    characteristic_values, kappa_x, kappa_y, estimate, point_label
+):
+    # """Plot the two lowest characteristic-value surfaces around a Bloch point."""
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    colors = ("tab:blue", "tab:orange")
+    for band in range(characteristic_values.shape[2]):
+        ax.plot_surface(
+            kappa_x / np.pi,
+            kappa_y / np.pi,
+            characteristic_values[:, :, band],
+            # color=colors[band],
+            alpha=0.78,
+            linewidth=0,
+            label=f"Band {band + 1}",
+        )
+
+    point = estimate["kappa_center"]
+    values_at_m = estimate["characteristic_values"]
+    ax.scatter(
+        [point[0] / np.pi],
+        [point[1] / np.pi],
+        [np.mean(values_at_m)],
+        color="black",
+        marker="x",
+        s=55,
+        label="M point",
+    )
+    slopes = estimate["directional_gap_slopes"]
+    slope_text = "\n".join(
+        f"{direction}: {slope:.4g}"
+        for direction, slope in slopes.items()
+    )
+    ax.text2D(
+        0.02,
+        0.98,
+        (
+            f"At {point_label}: " + r"$\lambda_1$" + f"={values_at_m[0]:.6g}, "
+            r"$\lambda_2$" + f"={values_at_m[1]:.6g}\n"
+            f"Direct gap={[f'{gap:.4g}' for gap in estimate['direct_gap']]}\n"
+            f"Mean near-M gap slope={estimate['mean_gap_slope']:.4g}\n"
+            f"Directional slopes (d gap / d|k|):\n{slope_text}"
+        ),
+        transform=ax.transAxes,
+        va="top",
+        fontsize=8,
+        bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
+    )
+    ax.set_xlabel(r"$\kappa_x/\pi$")
+    ax.set_ylabel(r"$\kappa_y/\pi$")
+    ax.set_zlabel(r"Characteristic value ($\omega^2$)")
+    ax.set_title(f"Lowest characteristic-value bands near {point_label}")
+    ax.legend(loc="lower right")
+    ax.view_init(elev=20, azim=60)
+    
+    fig.tight_layout()
+    return fig, ax
+
+def compare_bands_2_and_3(lat_c=1.0, grid_size=21, mesh_size=0.02, PEC_radius=0.1):
+    omega1, kappa_x, kappa_y = solve_frequency_surfaces(lat_c=lat_c, grid_size=2*grid_size-1, n_omega=3, mesh_size=mesh_size, radius_fraction=1.0, PEC_radius=PEC_radius)
+    
+    omega = np.empty((grid_size, grid_size, 2), dtype=float)
+    SHIFT = (2*grid_size-2)//4
+    # MEDIAN = np.median(omega1[0:grid_size,0:grid_size,2])
+    MEDIAN = np.median((omega1[0:grid_size,0:grid_size,2]+omega1[0:grid_size,0:grid_size,1])/2)
+    omega[:,:,0] = omega1[SHIFT:grid_size+SHIFT, SHIFT:grid_size+SHIFT, 1]
+    omega[:,:,1] = 2*MEDIAN - omega1[0:grid_size,0:grid_size,2]
+    # omega[:,:,2] = 2*MEDIAN-omega[:,:,2]
+    # shift = [np.pi/lat_c, np.pi/lat_c]
+    # for row in range(grid_size):
+    #     for column in range(grid_size):
+    #         shift_omega[row,column,0] = omega[row+SHIFT,column+SHIFT,1]
+    #         shift_omega[row,column,1] = 2*MEDIAN - omega[row,column,2]
+    # omega = shift_omega
+    kappa_x = kappa_x[SHIFT:grid_size+SHIFT, SHIFT:grid_size+SHIFT]
+    kappa_y = kappa_y[SHIFT:grid_size+SHIFT, SHIFT:grid_size+SHIFT]
+    
+    diff = omega[:,:,1]-omega[:,:,0]
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    for band in range(omega.shape[2]):
+        ax.plot_surface(
+            kappa_x / np.pi,
+            kappa_y / np.pi,
+            omega[:, :, band],
+            alpha=0.5,
+            linewidth=0.3,
+            label=f"Band {band + 1}"
+        )
+    
+    ax.plot_surface(
+        kappa_x / np.pi,
+        kappa_y / np.pi,
+        diff,
+        alpha=0.5,
+        linewidth=0.3,
+        label=f"Difference"
+    )
+    MIN = np.min(omega)
+    MAX = np.max(omega)
+    T = np.array([0.0, 0.0])
+    X = np.array([np.pi/lat_c, 0.0])
+    M = np.array([np.pi/lat_c, np.pi/lat_c])
+    ax.stem([T[0] / np.pi],[T[1] / np.pi],[MAX])
+    ax.scatter(
+        2*[T[0] / np.pi],
+        2*[T[1] / np.pi],
+        [0,1.1*MAX],
+        color="black",
+        marker=r"$\Gamma$",
+        s=55,
+        # label=r"$\Gamma$",
+    )
+    ax.stem([X[0] / np.pi],[X[1] / np.pi],[MAX])
+    ax.scatter(
+        2*[X[0] / np.pi],
+        2*[X[1] / np.pi],
+        [0,1.1*MAX],
+        color="black",
+        marker=r"$X$",
+        s=55,
+        # label=r"X",
+    )
+    ax.stem([M[0] / np.pi],[M[1] / np.pi],[MAX])
+    ax.scatter(
+        2*[M[0] / np.pi],
+        2*[M[1] / np.pi],
+        [0,1.1*MAX],
+        color="black",
+        marker=r"$M$",
+        s=55,
+        # label=r"M",
+    )
+    
+    ax.set_xlim([kappa_x[0].min() / np.pi, kappa_x[0].max() / np.pi])
+    ax.set_ylim([kappa_y[:,0].min() / np.pi, kappa_y[:,0].max() / np.pi])
+    ax.set_xlabel(r"$\kappa_x/\pi$")
+    ax.set_ylabel(r"$\kappa_y/\pi$")
+    ax.set_zlabel("Frequency")
+    ax.set_title("Square-lattice bands near the Gamma point")
+    ax.legend()
+    ax.view_init(elev=20, azim=60)
+    
+    fig.tight_layout()
+    
+    print(f"After shifting by (pi/a,/pi/a) and flipping band 3 about median midpoint between bands 2 and 3 ---")
+    print(f"Min Difference: {np.min(diff):.6f}, Max Difference: {np.max(diff):.6f}, Median Difference: {np.median(diff):.6f}")
+    return fig, ax
+
+
 def main():
     print("MatPlotLib backend: " + matplotlib.get_backend())
     # Graph images are written here; change this path to choose another location.
     output_dir = ROOT / "outputs"
     output_dir.mkdir(exist_ok=True)
-
+    
+    # time_stamp 
+    
+    surface_fig, _ = compare_bands_2_and_3(lat_c=1.0, grid_size=19, mesh_size=0.06, PEC_radius=0.1)
+    plt.show()
+    surface_fig.savefig(output_dir / "flipped_and_roatated_band3.png", dpi=180)
+    
+    exit()
     # Shared lattice/FEM setup: lattice constant a=1.0 and mesh spacing h=0.02.
     # Smaller h refines the mesh (and can shift results) at higher runtime cost.
     lat_c = 1.0

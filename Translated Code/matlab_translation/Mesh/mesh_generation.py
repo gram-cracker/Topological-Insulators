@@ -71,6 +71,8 @@ def mesh_generation_C4_PEC(xy_cell=None, xy_inc=None, mesh_size=0.02):
     The boundary sampling and maximum spacing follow the MATLAB
     ``mesh_generation_C4_PEC`` routine.  SciPy's Delaunay triangulation is
     filtered so elements inside or crossing the polygonal inclusion are removed.
+    
+    
     """
     if mesh_size <= 0:
         raise ValueError("mesh_size must be positive.")
@@ -80,6 +82,7 @@ def mesh_generation_C4_PEC(xy_cell=None, xy_inc=None, mesh_size=0.02):
     if xy_cell.shape[0] < 4:
         raise ValueError("The periodic cell must have at least four boundary points.")
     if xy_inc is None:
+        # Default to a circular inclusion with radius 10% of the cell size, centered in the cell.
         center = (xy_cell.min(axis=0) + xy_cell.max(axis=0)) / 2.0
         radius = 0.1 * min(np.ptp(xy_cell[:, 0]), np.ptp(xy_cell[:, 1]))
         theta = np.linspace(0.0, 2.0 * np.pi, 100, endpoint=False)
