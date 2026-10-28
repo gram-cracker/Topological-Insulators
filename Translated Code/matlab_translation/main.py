@@ -16,6 +16,8 @@ if str(ROOT) not in sys.path:
 from Finite_Element.FEM_matrices_C4_PEC_TE import FEM_matrices_C4_PEC_TE
 from Mesh.mesh_generation import mesh_generation_C4_PEC
 
+import time
+
 # import warnings
 # warnings.filterwarnings("ignore")
 
@@ -92,43 +94,44 @@ def _lowest_eigenfrequencies(matrices, kappa, n_omega):
 #     ])
     
     
-def _band_path(lat_c, n_kappa, path_type="MXTxM"):
+def _band_path(lat_c, n_kappa, path_type="TXMT"):
     if path_type == "TXMT":
-        """Return the T-to-X-to-M-to-T Bloch path in MATLAB coordinates."""
+        """Return the T to X to M to T Bloch path in MATLAB coordinates."""
         points = [
             (np.linspace(0.0, np.pi, n_kappa),np.zeros(n_kappa)),
             (np.pi * np.ones(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
             (np.linspace(np.pi, 0.0, n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
         ]
-    elif path_type == "MXTxM":
-        """Return the M-to-X-to-T-to-X'-to-M Bloch path in MATLAB coordinates."""
+    elif path_type == "MXTX'M":
+        """Return the M to X to T to X' to M Bloch path in MATLAB coordinates."""
         points = [
             (np.pi * np.ones(n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
             (np.linspace(np.pi, 0.0, n_kappa), np.zeros(n_kappa)),
             (np.zeros(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
             (np.linspace(0.0, np.pi, n_kappa), np.pi * np.ones(n_kappa)),
         ]
+    elif path_type =="TX'M'T":
+        """Return the T to X' to M' to T Bloch path in MATLAB coordinates."""
+        points = [
+            (np.zeros(n_kappa), np.linspace(0.0, np.pi, n_kappa)),
+            (np.linspace(0.0, -np.pi, n_kappa), np.pi * np.ones(n_kappa)),
+            (np.linspace(-np.pi, 0.0, n_kappa), np.linspace(np.pi, 0.0, n_kappa)),
+        ]
     else:
-        raise ValueError("path_type must be either 'TXMT' or 'MXTxM'.")
+        raise ValueError("path_type unsupported.")
     return np.vstack([
         np.column_stack((kx, ky)) / lat_c
         for kx, ky in points
     ])
 
 
-def solve_band_structure(lat_c=1.0, n_kappa=100, n_omega=7, mesh_size=0.02, PEC_radius=0.1):
-    # """Compute bands along the MATLAB M-to-X-to-T-to-M Bloch path."""
+def solve_band_structure(lat_c=1.0, n_kappa=100, n_omega=7, mesh_size=0.02, PEC_radius=0.1, path_type="TXMT"):
+    """Compute bands along the MATLAB path_type path."""
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=PEC_radius)
-    return _solve_band_structure(matrices, lat_c, n_kappa, n_omega)
+    return _solve_band_structure(matrices, lat_c, n_kappa, n_omega, path_type=path_type)
 
 
-def _solve_band_structure(matrices, lat_c, n_kappa, n_omega, path_type="MXTxM"):
-    # if path_type == "TXMT":
-    #     kappa_vec = _band_path_TXMT(lat_c, n_kappa)
-    #     # title = r"$\Gamma$-X-M-$\Gamma$"
-    # else:
-    #     kappa_vec = _band_path_MXTxM(lat_c, n_kappa)
-    #     # title = r"M-X-$\Gamma$-X'-M"
+def _solve_band_structure(matrices, lat_c, n_kappa, n_omega, path_type="TXMT"):
     kappa_vec = _band_path(lat_c, n_kappa, path_type)
     omega = np.empty((n_omega, kappa_vec.shape[0]), dtype=float)
     for n, kappa in enumerate(kappa_vec):
@@ -168,22 +171,24 @@ def _solve_frequency_surfaces(matrices, lat_c, grid_size, n_omega, radius_fracti
     return omega, kappa_x, kappa_y
 
 
-def solve_m_point_bands(
-    lat_c=1.0,
-    grid_size=21,
-    n_bands=2,
-    mesh_size=0.02,
-    radius_fraction=0.1,
-    estimate_samples=11,
-    PEC_radius=0.1,
-):
-    """Solve the two lowest characteristic-value bands in a neighborhood of M."""
-    matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=PEC_radius)
-    return _solve_m_point_bands(
-        matrices, lat_c, grid_size, n_bands, radius_fraction, estimate_samples
-    )
+# Depricated
+# def solve_m_point_bands(
+#     lat_c=1.0,
+#     grid_size=21,
+#     n_bands=2,
+#     mesh_size=0.02,
+#     radius_fraction=0.1,
+#     estimate_samples=11,
+#     PEC_radius=0.1,
+# ):
+#     """Solve the two lowest characteristic-value bands in a neighborhood of M."""
+#     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=PEC_radius)
+#     return _solve_m_point_bands(
+#         matrices, lat_c, grid_size, n_bands, radius_fraction, estimate_samples
+#     )
 
 
+# maybe depricated?
 def _solve_m_point_bands(
     matrices, lat_c, grid_size, n_bands, radius_fraction, estimate_samples
 ):
@@ -321,6 +326,10 @@ def plot_band_structure(omega, path_type=""):
         ax.set_xticks([0, omega.shape[1] // 4, 2 * omega.shape[1] // 4, 3 * omega.shape[1] // 4, omega.shape[1] - 1])
         ax.set_xticklabels(["M", "X", r"$\Gamma$", "X'", "M"])
         title = r"M-X-$\Gamma$-X'-M band structure"
+    elif path_type == "TX'M'T":
+        ax.set_xticks([0, omega.shape[1] // 3, 2 * omega.shape[1] // 3, omega.shape[1] - 1])
+        ax.set_xticklabels([r"$\Gamma$", "X'", "M'", r"$\Gamma$"])
+        title = r"$\Gamma$-X'-M'-$\Gamma$ band structure"
     else:
         title = "Band structure"
         
@@ -567,6 +576,7 @@ def plot_m_point_bands(characteristic_values, kappa_x, kappa_y, estimate):
         characteristic_values, kappa_x, kappa_y, estimate, "M"
     )
 
+
 def plot_m_point_touching_bands(characteristic_values, kappa_x, kappa_y, estimate):
     """Plot precomputed characteristic-value bands close to M."""
     estimate["characteristic_values"] = estimate["characteristic_values"][1:3]
@@ -574,6 +584,7 @@ def plot_m_point_touching_bands(characteristic_values, kappa_x, kappa_y, estimat
     return _plot_lattice_point_bands(
         characteristic_values[:,:,1:3], kappa_x, kappa_y, estimate, "M"
     )
+    
     
 def calc_m_point_lowest_touching(lat_c=1.0, PEC_radius=0.1):
     M = np.array([np.pi / lat_c, np.pi / lat_c])
@@ -583,66 +594,6 @@ def calc_m_point_lowest_touching(lat_c=1.0, PEC_radius=0.1):
     touching = characteristic_vals[1:3]
     return touching
 
-
-
-def _plot_lattice_point_bands(
-    characteristic_values, kappa_x, kappa_y, estimate, point_label
-):
-    # """Plot the two lowest characteristic-value surfaces around a Bloch point."""
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection="3d")
-    colors = ("tab:blue", "tab:orange")
-    for band in range(characteristic_values.shape[2]):
-        ax.plot_surface(
-            kappa_x / np.pi,
-            kappa_y / np.pi,
-            characteristic_values[:, :, band],
-            # color=colors[band],
-            alpha=0.78,
-            linewidth=0,
-            label=f"Band {band + 1}",
-        )
-
-    point = estimate["kappa_center"]
-    values_at_m = estimate["characteristic_values"]
-    ax.scatter(
-        [point[0] / np.pi],
-        [point[1] / np.pi],
-        [np.mean(values_at_m)],
-        color="black",
-        marker="x",
-        s=55,
-        label="M point",
-    )
-    slopes = estimate["directional_gap_slopes"]
-    slope_text = "\n".join(
-        f"{direction}: {slope:.4g}"
-        for direction, slope in slopes.items()
-    )
-    ax.text2D(
-        0.02,
-        0.98,
-        (
-            f"At {point_label}: " + r"$\lambda_1$" + f"={values_at_m[0]:.6g}, "
-            r"$\lambda_2$" + f"={values_at_m[1]:.6g}\n"
-            f"Direct gap={[f'{gap:.4g}' for gap in estimate['direct_gap']]}\n"
-            f"Mean near-M gap slope={estimate['mean_gap_slope']:.4g}\n"
-            f"Directional slopes (d gap / d|k|):\n{slope_text}"
-        ),
-        transform=ax.transAxes,
-        va="top",
-        fontsize=8,
-        bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
-    )
-    ax.set_xlabel(r"$\kappa_x/\pi$")
-    ax.set_ylabel(r"$\kappa_y/\pi$")
-    ax.set_zlabel(r"Characteristic value ($\omega^2$)")
-    ax.set_title(f"Lowest characteristic-value bands near {point_label}")
-    ax.legend(loc="lower right")
-    ax.view_init(elev=20, azim=60)
-    
-    fig.tight_layout()
-    return fig, ax
 
 def compare_bands_2_and_3(lat_c=1.0, grid_size=21, mesh_size=0.02, PEC_radius=0.1):
     omega1, kappa_x, kappa_y = solve_frequency_surfaces(lat_c=lat_c, grid_size=2*grid_size-1, n_omega=3, mesh_size=mesh_size, radius_fraction=1.0, PEC_radius=PEC_radius)
@@ -737,19 +688,33 @@ def compare_bands_2_and_3(lat_c=1.0, grid_size=21, mesh_size=0.02, PEC_radius=0.
     return fig, ax
 
 
-def main():
+def compare_to_analytic_estimate(lat_c=1.0, radii=[0.25, 0.1, 0.01]):
+    # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
+    radii = [0.25, 0.1, 0.01]
+    C_0 = 8* (np.pi**3)/(lat_c**3)
+    for eps in radii:
+        estimate = 2*np.pi**2+C_0*(eps**2)
+        touching = calc_m_point_lowest_touching(lat_c=lat_c, PEC_radius=eps)
+        avg = np.mean(touching)
+        print(f"Radius = {eps:.2f}   Touch @ M: {touching[0]:.6f}, {touching[1]:.6f}   Averaged: {avg:.6f}   Error Gap: {touching[1] - touching[0]:.6f}")
+        # print(f"                Averaged:   {avg:.6f}")
+        print(f"                Estimate:  {estimate:.6f}")
+        print(f"                Diffs:     {touching[0]-estimate:.6f}, {touching[1]-estimate:.6f}\n")
+
+
+def _main():
     print("MatPlotLib backend: " + matplotlib.get_backend())
     # Graph images are written here; change this path to choose another location.
     output_dir = ROOT / "outputs"
     output_dir.mkdir(exist_ok=True)
     
-    # time_stamp 
+    time_stamp = time.perf_counter()
     
-    surface_fig, _ = compare_bands_2_and_3(lat_c=1.0, grid_size=19, mesh_size=0.06, PEC_radius=0.1)
-    plt.show()
-    surface_fig.savefig(output_dir / "flipped_and_roatated_band3.png", dpi=180)
+    # surface_fig, _ = compare_bands_2_and_3(lat_c=1.0, grid_size=19, mesh_size=0.06, PEC_radius=0.1)
+    # plt.show()
+    # surface_fig.savefig(output_dir / "flipped_and_roatated_band3.png", dpi=180)
     
-    exit()
+    # exit()
     # Shared lattice/FEM setup: lattice constant a=1.0 and mesh spacing h=0.02.
     # Smaller h refines the mesh (and can shift results) at higher runtime cost.
     lat_c = 1.0
@@ -835,6 +800,97 @@ def main():
     m_fig.savefig(output_dir / "m_point_lower_bands.png", dpi=180)
     plt.show()
     m_fig.savefig(output_dir / "m_point_lower_bands_snapshot.png", dpi=180)
+    plt.close(m_fig)
+
+    values_at_m = m_estimate["characteristic_values"]
+    normalized_frequencies = np.sqrt(values_at_m) / (2.0 * np.pi)
+    print(f"Saved band-structure graphs to {output_dir}")
+    print(
+        "M-point estimate: "
+        f"lambda_1={values_at_m[0]:.8g}, lambda_2={values_at_m[1]:.8g}, "
+        f"direct gap={[f'{gap:.8g}' for gap in m_estimate['direct_gap']]}"
+    )
+    print(
+        "M-point normalized frequencies: "
+        f"f1={normalized_frequencies[0]:.8g}, f2={normalized_frequencies[1]:.8g}"
+    )
+    print(
+        "Mean near-M characteristic-value gap slope "
+        f"d(lambda_2-lambda_1)/d|k|={m_estimate['mean_gap_slope']:.8g}"
+    )
+
+
+def main():
+    print("MatPlotLib backend: " + matplotlib.get_backend())
+    # Graph images are written here; change this path to choose another location.
+    output_dir = ROOT / "outputs"
+    output_dir.mkdir(exist_ok=True)
+    
+    time_stamp = time.perf_counter()
+    
+    # Shared lattice/FEM setup: lattice constant a=1.0 and mesh spacing h=0.02.
+    # Smaller h refines the mesh (and can shift results) at higher runtime cost.
+    lat_c = 1.0
+    mesh_size = 0.02
+    
+    # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
+    compare_to_analytic_estimate(lat_c=lat_c, radii=[0.25,0.1,0.01])
+    
+    eps = 0.1  # radius of PEC inclusion
+    matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=eps)
+    
+    # Surface plots!    
+    omega, kappa_x, kappa_y = solve_frequency_surfaces(grid_size=41, n_omega=3, radius_fraction=1)
+    surface_fig, _ = plot_frequency_surfaces(omega, kappa_x, kappa_y)
+    surface_fig.savefig(output_dir / "surface_plot.png", dpi=180)
+    plt.show()
+    surface_fig.savefig(output_dir / "surface_plot_snapshot.png", dpi=180)
+    plt.close(surface_fig)
+
+    # Band path: 100 samples on each of the path segments,
+    # with the lowest 7 bands computed at every Bloch vector.
+    path_type = "TX'M'T"  # or "MXTxM" or "TXMT"
+    path_samples = 100
+    path_band_count = 7
+    omega, _ = _solve_band_structure(
+        matrices, lat_c, path_samples, path_band_count, path_type
+    )
+    band_fig, _ = plot_band_structure(omega, path_type)
+    band_fig.savefig(output_dir / f"band_structure_{path_type}.png", dpi=180)
+    plt.close(band_fig)
+    
+
+    # M-point plot: center is (pi/a, pi/a); radius_fraction=0.1 samples
+    # +/-0.1*pi/a along each axis. grid_size controls the 2-D plot resolution.
+    # Two lowest characteristic-value bands are shown; estimate_samples controls
+    # the number of radial samples used for the near-M gap-slope estimate.
+    M = np.array([np.pi / lat_c, np.pi / lat_c])
+    m_grid_size = 41
+    m_band_count = 3
+    m_radius_fraction = 0.1
+    m_estimate_samples = 11
+    # m_values, m_kx, m_ky, m_estimate = _solve_m_point_bands(
+    #     matrices,
+    #     lat_c,
+    #     m_grid_size,
+    #     m_band_count,
+    #     m_radius_fraction,
+    #     m_estimate_samples,
+    # )
+    m_values, m_kx, m_ky, m_estimate = _solve_lattice_point_bands(
+        matrices=matrices,
+        kappa_center=M,
+        lat_c=lat_c,
+        grid_size=m_grid_size,
+        n_bands=m_band_count,
+        radius_fraction=m_radius_fraction,
+        estimate_samples=m_estimate_samples
+    )
+    # m_fig, _ = plot_m_point_bands(m_values, m_kx, m_ky, m_estimate)
+    m_fig, _ = plot_m_point_touching_bands(m_values, m_kx, m_ky, m_estimate)
+    m_fig.savefig(output_dir / "m_point_touch.png", dpi=180)
+    plt.show()
+    m_fig.savefig(output_dir / "m_point_touch_snapshot.png", dpi=180)
     plt.close(m_fig)
 
     values_at_m = m_estimate["characteristic_values"]
