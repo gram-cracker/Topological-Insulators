@@ -5,9 +5,13 @@ import matplotlib
 # matplotlib.use("Agg")
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
+import cupy as cp #Cupy
 import numpy as np
 from scipy.linalg import eigh
-from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import eigsh as scipy_eigsh
+from cupyx.scipy.sparse import csr_matrix as cupy_csr_matrix
+from cupyx.scipy.sparse.linalg import eigsh as cupy_eigsh
+
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -43,10 +47,13 @@ def _assemble_cell(lat_c=1.0, mesh_size=0.02, PEC_radius=0.1):
     return M, Mx, My, Me
 
 
-def _lowest_characteristic_values(matrices, kappa, n_omega):
+def _lowest_characteristic_values_numpy(matrices, kappa, n_omega):
     M, Mx, My, Me = matrices
+
     operator = M - 2.0j * (kappa[0] * Mx + kappa[1] * My)
     operator = operator + np.dot(kappa, kappa) * Me
+
+    
     if n_omega >= operator.shape[0]:
         raise ValueError("n_omega must be smaller than the number of FEM equations.")
 
@@ -59,7 +66,7 @@ def _lowest_characteristic_values(matrices, kappa, n_omega):
             subset_by_index=(0, n_omega - 1),
         )
     else:
-        eigenvalues = eigsh(
+        eigenvalues = scipy_eigsh(
             operator,
             k=n_omega,
             M=Me,
@@ -75,6 +82,49 @@ def _lowest_characteristic_values(matrices, kappa, n_omega):
         raise ArithmeticError("The FEM system produced negative eigenvalues.")
     eigenvalues = np.maximum(eigenvalues, 0.0)
     return np.sort(eigenvalues)
+
+
+def _lowest_characteristic_values_cupy(matrices, kappa, n_omega):
+    """Compute characteristic values using CuPy and the GPU eigensolver."""
+    M, Mx, My, Me = matrices
+    M_gpu = cupy_csr_matrix(M)
+    Mx_gpu = cupy_csr_matrix(Mx)
+    My_gpu = cupy_csr_matrix(My)
+    Me_gpu = cupy_csr_matrix(Me)
+    kappa_gpu = cp.asarray(kappa)
+
+    operator_gpu = (
+        M_gpu
+        - 2.0j * (kappa_gpu[0] * Mx_gpu + kappa_gpu[1] * My_gpu)
+        + cp.dot(kappa_gpu, kappa_gpu) * Me_gpu
+    )
+    if n_omega >= operator_gpu.shape[0] - 1:
+        raise ValueError(
+            "The CuPy sparse eigensolver requires n_omega < matrix size - 1."
+        )
+
+    eigenvalues_gpu = cupy_eigsh(
+        operator_gpu,
+        k=n_omega,
+        M=Me_gpu,
+        sigma=0.0,
+        which="LM",
+        return_eigenvectors=False,
+    )
+    eigenvalues = cp.asnumpy(eigenvalues_gpu)
+    eigenvalues = np.real_if_close(eigenvalues, tol=1000)
+    if np.iscomplexobj(eigenvalues):
+        raise ArithmeticError("The FEM eigenvalues are not real within numerical tolerance.")
+    eigenvalues = np.real(eigenvalues)
+    if np.any(eigenvalues < -1e-10):
+        raise ArithmeticError("The FEM system produced negative eigenvalues.")
+    return np.sort(np.maximum(eigenvalues, 0.0))
+
+
+def _lowest_characteristic_values(matrices, kappa, n_omega):
+    # Comment out one line and uncomment the other to switch backends.
+     return _lowest_characteristic_values_numpy(matrices, kappa, n_omega)
+    #return _lowest_characteristic_values_cupy(matrices, kappa, n_omega)
 
 
 def _lowest_eigenfrequencies(matrices, kappa, n_omega):
@@ -495,7 +545,8 @@ def _plot_lattice_point_bands(
         )
 
     point = estimate["kappa_center"]
-    values_at_m = estimate["characteristic_values"][bands]
+    values_at_m = np.array(estimate["characteristic_values"])[bands]
+    # values_at_m = estimate["characteristic_values"]
     ax.scatter(
         [point[0] / np.pi],
         [point[1] / np.pi],
@@ -505,7 +556,8 @@ def _plot_lattice_point_bands(
         s=55,
         label="M point",
     )
-    slopes = estimate["directional_gap_slopes"][bands]
+    slopes = np.array(estimate["directional_gap_slopes"])[bands]
+    #slopes = estimate["directional_gap_slopes"]
     slope_text = "\n".join(
         f"{direction}: {slope:.4g}"
         for direction, slope in slopes.items()
@@ -516,7 +568,7 @@ def _plot_lattice_point_bands(
         (
             f"At {point_label}: " + r"$\lambda_1$" + f"={values_at_m[0]:.6g}, "
             r"$\lambda_2$" + f"={values_at_m[1]:.6g}\n"
-            f"Direct gap={[f'{gap:.4g}' for gap in estimate['direct_gap'][bands]]}\n"
+            f"Direct gap={[f'{gap:.4g}' for gap in np.array(estimate['direct_gap'])[bands]]}\n"
             f"Mean near-M gap slope={estimate['mean_gap_slope']:.4g}\n"
             f"Directional slopes (d gap / d|k|):\n{slope_text}"
         ),
@@ -730,8 +782,8 @@ def main():
 
     # Band path: 100 samples on each of the path segments,
     # with the lowest 7 bands computed at every Bloch vector.
-    path_type = "TX'M'T"  # or "MXTxM" or "TXMT"
-    path_samples = 100
+    path_type =  "TX'M'T"  # or "MXTxM" or "TXMT"
+    path_samples = 200
     path_band_count = 7
     omega, _ = _solve_band_structure(
         matrices, lat_c, path_samples, path_band_count, path_type

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+#import cupy as np
 import numpy as np
 
 from main import plot_lattice_point_bands
