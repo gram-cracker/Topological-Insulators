@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
-# matplotlib.use("Agg")
+#matplotlib.use("Agg")
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -332,9 +332,14 @@ def _solve_lattice_point_bands(
                 n_bands,
             ) * lat_c / (2.0 * np.pi)
 
-    values_at_center = _lowest_characteristic_values(
-        matrices, kappa_center, n_bands
-    )
+    #values_at_center = _lowest_characteristic_values(
+       # matrices, kappa_center, n_bands
+    #)
+    values_at_center = (
+    _lowest_characteristic_values(matrices, kappa_center, n_bands)
+    * lat_c
+    / (2.0 * np.pi)
+)
     directions = {
         "kx": np.array([1.0, 0.0]),
         "ky": np.array([0.0, 1.0]),
@@ -568,27 +573,6 @@ def _plot_lattice_point_bands(
         s=55,
         label="M point",
     )
-    slopes = np.array(estimate["directional_gap_slopes"])[bands]
-    #slopes = estimate["directional_gap_slopes"]
-    slope_text = "\n".join(
-        f"{direction}: {slope:.4g}"
-        for direction, slope in slopes.items()
-    )
-    ax.text2D(
-        0.02,
-        0.98,
-        (
-            f"At {point_label}: " + r"$\lambda_1$" + f"={values_at_m[0]:.6g}, "
-            r"$\lambda_2$" + f"={values_at_m[1]:.6g}\n"
-            f"Direct gap={[f'{gap:.4g}' for gap in np.array(estimate['direct_gap'])[bands]]}\n"
-            f"Mean near-M gap slope={estimate['mean_gap_slope']:.4g}\n"
-            f"Directional slopes (d gap / d|k|):\n{slope_text}"
-        ),
-        transform=ax.transAxes,
-        va="top",
-        fontsize=8,
-        bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
-    )
     ax.set_xlabel(r"$\kappa_x/\pi$")
     ax.set_ylabel(r"$\kappa_y/\pi$")
     ax.set_zlabel(r"Normalized characteristic value ($\omega\frac{a}{2\pi}$)")
@@ -650,9 +634,9 @@ def plot_m_point_touching_bands(characteristic_values, kappa_x, kappa_y, estimat
     )
     
     
-def calc_m_point_lowest_touching(lat_c=1.0, PEC_radius=0.1):
+def calc_m_point_lowest_touching(lat_c=1.0, PEC_radius=0.1, mesh_size=0.02):
     M = np.array([np.pi / lat_c, np.pi / lat_c])
-    mesh_size = min(0.02, 0.5 * PEC_radius)
+    mesh_size = min(mesh_size, 0.5 * PEC_radius)
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=PEC_radius)
     characteristic_vals = _lowest_eigenfrequencies(matrices, M, 3)
     touching = characteristic_vals[1:3]
