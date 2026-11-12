@@ -750,12 +750,12 @@ def main():
     # Shared lattice/FEM setup: lattice constant a=1.0 and mesh spacing h=0.02.
     # Smaller h refines the mesh (and can shift results) at higher runtime cost.
     lat_c = 1.0
-    mesh_size = 0.01
+    mesh_size = 0.02
     
     # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
     compare_to_analytic_estimate(lat_c=lat_c, radii=[0.25,0.1,0.01], mesh_size = .01)
     
-    eps = 0.05  # radius of PEC inclusion
+    eps = 0.1  # radius of PEC inclusion
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=eps)
     
     # Surface plots!    
