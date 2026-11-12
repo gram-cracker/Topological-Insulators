@@ -5,17 +5,19 @@ import matplotlib
 # matplotlib.use("Agg")
 matplotlib.use("QtAgg")
 import matplotlib.pyplot as plt
-import cupy as cp #Cupy
 import numpy as np
 from scipy.linalg import eigh
 from scipy.sparse.linalg import eigsh as scipy_eigsh
-from cupyx.scipy.sparse import csr_matrix as cupy_csr_matrix
-from cupyx.scipy.sparse.linalg import eigsh as cupy_eigsh
+
+#Cupy
+# import cupy as cp 
+# from cupyx.scipy.sparse import csr_matrix as cupy_csr_matrix
+# from cupyx.scipy.sparse.linalg import eigsh as cupy_eigsh
 
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(ROOT))  
 
 from Finite_Element.FEM_matrices_C4_PEC_TE import FEM_matrices_C4_PEC_TE
 from Mesh.mesh_generation import mesh_generation_C4_PEC
@@ -32,6 +34,16 @@ def geo_PEC_inclusions(lat_c=1.0, PEC_radius=0.1):
     theta = np.linspace(0.0, 2.0 * np.pi, 100, endpoint=False)
     return center + PEC_radius * np.column_stack((np.cos(theta), np.sin(theta)))
 
+def geo_PEC_inclusions_square(lat_c=1.0, PEC_radius=0.1, corner_radius=0.01):
+    """Return the polygonal square PEC boundary used by the MATLAB model."""
+    center = np.array([0.5 * lat_c, 0.5 * lat_c])
+    half_side = PEC_radius / np.sqrt(2)
+    return np.array([
+        center + [-half_side, -half_side],
+        center + [half_side, -half_side],
+        center + [half_side, half_side],
+        center + [-half_side, half_side],
+    ])
 
 def _assemble_cell(lat_c=1.0, mesh_size=0.02, PEC_radius=0.1):
     xy_box = np.array([0.0, lat_c, 0.0, lat_c])
@@ -123,7 +135,7 @@ def _lowest_characteristic_values_cupy(matrices, kappa, n_omega):
 
 def _lowest_characteristic_values(matrices, kappa, n_omega):
     # Comment out one line and uncomment the other to switch backends.
-     return _lowest_characteristic_values_numpy(matrices, kappa, n_omega)
+    return _lowest_characteristic_values_numpy(matrices, kappa, n_omega)
     #return _lowest_characteristic_values_cupy(matrices, kappa, n_omega)
 
 
@@ -642,7 +654,7 @@ def calc_m_point_lowest_touching(lat_c=1.0, PEC_radius=0.1):
     M = np.array([np.pi / lat_c, np.pi / lat_c])
     mesh_size = min(0.02, 0.5 * PEC_radius)
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=PEC_radius)
-    characteristic_vals = _lowest_characteristic_values(matrices, M, 3)
+    characteristic_vals = _lowest_eigenfrequencies(matrices, M, 3)
     touching = characteristic_vals[1:3]
     return touching
 
@@ -741,17 +753,19 @@ def compare_bands_2_and_3(lat_c=1.0, grid_size=21, mesh_size=0.02, PEC_radius=0.
 
 
 def compare_to_analytic_estimate(lat_c=1.0, radii=[0.25, 0.1, 0.01]):
-    # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
-    radii = [0.25, 0.1, 0.01]
-    C_0 = 8* (np.pi**3)/(lat_c**3)
+    ''' Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate. '''
+    C_0 = 8* (np.pi**3)/(lat_c**4)
+    # print("Normalized characteristic values omega * a / (2 pi)")
     for eps in radii:
-        estimate = 2*np.pi**2+C_0*(eps**2)
+        estimate = np.sqrt(2*np.pi**2+C_0*(eps**2))
+        # *lat_c/(2*np.pi)
         touching = calc_m_point_lowest_touching(lat_c=lat_c, PEC_radius=eps)
+        # *lat_c/(2*np.pi)
         avg = np.mean(touching)
         print(f"Radius = {eps:.2f}   Touch @ M: {touching[0]:.6f}, {touching[1]:.6f}   Averaged: {avg:.6f}   Error Gap: {touching[1] - touching[0]:.6f}")
         # print(f"                Averaged:   {avg:.6f}")
-        print(f"                Estimate:  {estimate:.6f}")
-        print(f"                Diffs:     {touching[0]-estimate:.6f}, {touching[1]-estimate:.6f}\n")
+        print(f"                Analytic:  {estimate:.6f}")
+        print(f"                Diffs:     {touching[0]-estimate:.6f}, {touching[1]-estimate:.6f}   Averaged Diff: {avg-estimate:.6f}\n")
 
 def main():
     print("MatPlotLib backend: " + matplotlib.get_backend())
@@ -764,25 +778,25 @@ def main():
     # Shared lattice/FEM setup: lattice constant a=1.0 and mesh spacing h=0.02.
     # Smaller h refines the mesh (and can shift results) at higher runtime cost.
     lat_c = 1.0
-    mesh_size = 0.02
+    mesh_size = 0.01
     
     # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
-    compare_to_analytic_estimate(lat_c=lat_c, radii=[0.25,0.1,0.01])
-    
+    compare_to_analytic_estimate(lat_c=lat_c, radii=[0.25,0.1,0.05,0.01])
+    exit()
     eps = 0.1  # radius of PEC inclusion
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=eps)
     
     # Surface plots!    
-    omega, kappa_x, kappa_y = solve_frequency_surfaces(grid_size=41, n_omega=3, radius_fraction=1)
-    surface_fig, _ = plot_frequency_surfaces(omega, kappa_x, kappa_y)
-    surface_fig.savefig(output_dir / "surface_plot.png", dpi=180)
-    plt.show()
-    surface_fig.savefig(output_dir / "surface_plot_snapshot.png", dpi=180)
-    plt.close(surface_fig)
+    # omega, kappa_x, kappa_y = solve_frequency_surfaces(grid_size=41, n_omega=3, radius_fraction=1)
+    # surface_fig, _ = plot_frequency_surfaces(omega, kappa_x, kappa_y)
+    # surface_fig.savefig(output_dir / "surface_plot.png", dpi=180)
+    # plt.show()
+    # surface_fig.savefig(output_dir / "surface_plot_snapshot.png", dpi=180)
+    # plt.close(surface_fig)
 
     # Band path: 100 samples on each of the path segments,
     # with the lowest 7 bands computed at every Bloch vector.
-    path_type =  "TX'M'T"  # or "MXTxM" or "TXMT"
+    path_type = "TXMT"  # or "MXTxM" or "TXMT" or "TX'M'T"
     path_samples = 200
     path_band_count = 7
     omega, _ = _solve_band_structure(
