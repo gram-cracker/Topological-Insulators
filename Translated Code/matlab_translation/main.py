@@ -30,7 +30,7 @@ from bandpath import (
     plot_band_structure,
     plot_m_point_touching_bands,
 )
-from inclusions import _assemble_cell, geo_PEC_inclusions_squircle, geo_PEC_inclusions
+from inclusions import _assemble_cell, geo_PEC_inclusions_squircle, geo_PEC_inclusions, geo_PEC_inclusions_triangle
 
 
 
@@ -53,13 +53,14 @@ def main():
     lat_c = 1.0
     mesh_size = 0.02
     eps = 0.1  # inclusion radius parameter
-    inc1 = geo_PEC_inclusions_squircle(lat_c, PEC_radius=eps)
+    #inc1 = geo_PEC_inclusions_squircle(lat_c, PEC_radius=eps)
+    inc1 = geo_PEC_inclusions_triangle(lat_c, PEC_radius=eps)
     #inc1 = geo_PEC_inclusions(lat_c, PEC_radius=eps)
     plt.plot(inc1[:,0],inc1[:,1])
     plt.show()
 
     # Compute touching characteristic values at M for several PEC inclusion radii and compare to analyic estimate.
-    compare_to_analytic_estimate(lat_c=lat_c, radii=[0.25,0.1,0.05,0.01])
+    compare_to_analytic_estimate(lat_c=lat_c, radii=[0.2,0.1,0.05,0.01])
     #exit() for when you want to just gain eigen estimates
     matrices = _assemble_cell(lat_c=lat_c, mesh_size=mesh_size, PEC_radius=eps)
     
@@ -80,7 +81,7 @@ def main():
         matrices, lat_c, path_samples, path_band_count, path_type
     )
     band_fig, _ = plot_band_structure(omega, path_type)
-    band_fig.savefig(output_dir / f"Squircle_band_structure_9_eps=.1{path_type}.png", dpi=180)
+    band_fig.savefig(output_dir / f"Triangle_band_structure_1_eps=.1{path_type}.png", dpi=180)
     plt.close(band_fig)
     
     exit()

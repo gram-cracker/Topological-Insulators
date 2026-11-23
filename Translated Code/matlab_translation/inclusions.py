@@ -26,8 +26,6 @@ import time
 
 
 
-
-
 def geo_PEC_inclusions(lat_c=1.0, PEC_radius=0.1):
     """Return the polygonal circular PEC boundary used by the MATLAB model."""
     # radius = 0.1 * lat_c
@@ -44,6 +42,24 @@ def geo_PEC_inclusions_squircle(lat_c=1.0, PEC_radius=0.1, Square_constant=1):
     ro = (PEC_radius * np.sqrt(2))/(s * np.abs(np.sin(2 * (theta + 0.0001))) ) * np.sqrt(1 - np.sqrt(1 - s**2 * (np.sin(2*(theta+ 0.0001))**2)))
     return center +   np.column_stack((ro * np.cos(theta), ro * np.sin(theta)))
 
+def geo_PEC_inclusions_triangle(lat_c=1.0, PEC_radius=0.1):
+    """
+    Polar representation of an equilateral triangle.
+    PEC_radius is the inradius scaling parameter.
+    """
+
+    center = np.array([0.5 * lat_c, 0.5 * lat_c])
+
+    theta = np.linspace(0, 2*np.pi, 300, endpoint=False)
+
+    rho = PEC_radius / np.cos(
+        ((theta + np.pi/6) % (2*np.pi/3)) - np.pi/3
+    )
+    return center + np.column_stack(
+        (rho * np.cos(theta), rho * np.sin(theta))
+    )
+
+
 def _assemble_cell(lat_c=1.0, mesh_size=0.02, PEC_radius=0.1):
     xy_box = np.array([0.0, lat_c, 0.0, lat_c])
     xy_cell = np.array([
@@ -53,7 +69,9 @@ def _assemble_cell(lat_c=1.0, mesh_size=0.02, PEC_radius=0.1):
         [0.0, lat_c],
     ])
     #xy_inc = geo_PEC_inclusions(lat_c=lat_c, PEC_radius=PEC_radius)
-    xy_inc = geo_PEC_inclusions_squircle(lat_c=lat_c, PEC_radius=PEC_radius)
+    #xy_inc = geo_PEC_inclusions_squircle(lat_c=lat_c, PEC_radius=PEC_radius)
+    xy_inc = geo_PEC_inclusions_triangle(lat_c=lat_c, PEC_radius=PEC_radius)
     p, t, _ = mesh_generation_C4_PEC(xy_cell, xy_inc, mesh_size=mesh_size)
     M, Mx, My, Me, _ = FEM_matrices_C4_PEC_TE(p, t, xy_box, xy_inc)
     return M, Mx, My, Me
+
